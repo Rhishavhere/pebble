@@ -5,7 +5,7 @@ class Brain:
     Handles all communication with the Ollama model.
     It maintains the conversation history and defines the pet's personality.
     """
-    def __init__(self, model='gemma:2b'):
+    def __init__(self, model='gemma3:1b'):
         """
         Initializes the brain with a system prompt that defines the pet's persona.
         """
@@ -50,8 +50,10 @@ class Brain:
             # We keep the system prompt and the last 6 messages (3 user, 3 assistant)
             if len(self.conversation_history) > 7:
                 self.conversation_history = [self.system_prompt] + self.conversation_history[-6:]
-                
+
+            print(f"Gemma response: {assistant_response}")
             return assistant_response
+
         
         except Exception as e:
             print(f"Error communicating with Ollama: {e}")

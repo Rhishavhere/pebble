@@ -7,22 +7,23 @@ import random
 import threading
 import time
 
-# Import the brain from the other file
-from pet_brain import Brain
+# --- NEW: Import Pillow for image handling ---
+from PIL import Image, ImageTk
 
-# --- Configuration Constants ---
-BALL_RADIUS = 20
-BALL_COLOR = "#c8c8c8"
+# Import the brain from the other file
+from brain import Brain
+
+# --- MODIFIED: Configuration Constants ---
+IMAGE_SIZE = 60        # The size (width and height) to display the image
 GRAVITY = 0.9
 BOUNCE_FACTOR = 0.7
 AIR_FRICTION = 0.995
 GROUND_FRICTION = 0.9
-UPDATE_INTERVAL = 15   # Milliseconds between screen updates
-EVENT_COOLDOWN = 5000  # Milliseconds (5 seconds) before another event can trigger a thought
+UPDATE_INTERVAL = 15
+EVENT_COOLDOWN = 5000
 
 # --- Helper Functions ---
 def create_rounded_rectangle(canvas, x1, y1, x2, y2, radius=25, **kwargs):
-    # ... (This function remains the same as before)
     points = [
         x1 + radius, y1, x2 - radius, y1, x2, y1, x2, y1 + radius,
         x2, y2 - radius, x2, y2, x2 - radius, y2, x1 + radius, y2,
@@ -38,11 +39,27 @@ class BouncingBall:
         self.screen_height = screen_height
         self.ground_level = ground_level
 
-        # Physical properties
+        # --- MODIFIED: Load and prepare the image ---
+        self.photo_image = None
+        try:
+            pil_image = Image.open("softball.png")
+            pil_image = pil_image.resize((IMAGE_SIZE, IMAGE_SIZE), Image.Resampling.LANCZOS)
+            self.photo_image = ImageTk.PhotoImage(pil_image)
+        except FileNotFoundError:
+            print("Error: softball.png not found! Make sure it's in the same directory. Falling back to a circle.")
+        except Exception as e:
+            print(f"Error loading image: {e}. Falling back to a circle.")
+
+        # Physical properties based on image size
+        self.radius = IMAGE_SIZE / 2
         self.x, self.y = screen_width / 2, screen_height / 4
         self.vx, self.vy = 5, 0
-        self.radius = BALL_RADIUS
-        self.id = self.canvas.create_oval(0, 0, 0, 0, fill=BALL_COLOR, outline="")
+
+        # Create an image on the canvas, or a fallback circle
+        if self.photo_image:
+            self.id = self.canvas.create_image(self.x, self.y, image=self.photo_image)
+        else:
+            self.id = self.canvas.create_oval(self.x - self.radius, self.y - self.radius, self.x + self.radius, self.y + self.radius, fill="#c8c8c8", outline="")
 
         # Interaction properties
         self.is_dragging = False
@@ -55,93 +72,71 @@ class BouncingBall:
         self.bubble_visible = False
         self.bubble_message = ""
 
-        # --- Brain Integration ---
+        # Brain Integration
         self.brain = Brain()
         self.is_thinking = False
         self.last_event_time = 0
 
     # --- Core Logic ---
     def update(self):
-        """Main update loop for physics and events."""
         self._apply_physics()
         self._update_canvas_objects()
 
     def _apply_physics(self):
-        """Calculates the ball's next position based on physics."""
         if self.is_dragging:
             return
-
         self.vy += GRAVITY
         self.vx *= AIR_FRICTION
         self.vy *= AIR_FRICTION
         self.x += self.vx
         self.y += self.vy
-
-        # Ground collision
         if self.y + self.radius >= self.ground_level:
             self.y = self.ground_level - self.radius
             self.vy *= -BOUNCE_FACTOR
             self.vx *= GROUND_FRICTION
             if abs(self.vy) < 1: self.vy = 0
-
-        # Wall collision
         if self.x + self.radius >= self.screen_width or self.x - self.radius <= 0:
             self.vx *= -BOUNCE_FACTOR
             self.trigger_event("hit a wall")
             if self.x + self.radius >= self.screen_width: self.x = self.screen_width - self.radius
             else: self.x = self.radius
-
-        # Ceiling collision
         if self.y - self.radius <= 0:
             self.y = self.radius
             self.vy *= -BOUNCE_FACTOR
             self.trigger_event("hit the ceiling")
 
     def _update_canvas_objects(self):
-        """Redraws the ball and its speech bubble on the canvas."""
-        # Move the ball
-        self.canvas.coords(self.id, self.x - self.radius, self.y - self.radius, self.x + self.radius, self.y + self.radius)
-        # Move the bubble if visible
+        # --- MODIFIED: Use new coordinates for the image center ---
+        self.canvas.coords(self.id, self.x, self.y)
         if self.bubble_visible:
             self._redraw_speech_bubble()
 
-    # --- Brain and Communication ---
+    # --- Brain and Communication (Unchanged) ---
     def trigger_event(self, event_description: str):
-        """
-        Triggers the brain to think about an event, with a cooldown.
-        This is the main entry point for all reactive thoughts.
-        """
         current_time = time.time() * 1000
         if (current_time - self.last_event_time) < EVENT_COOLDOWN:
-            return # Event is on cooldown
-
+            return
         self.last_event_time = current_time
         prompt = f"React to this event: You just {event_description}."
         self._think_in_background(prompt)
 
     def ask_brain(self, user_prompt: str):
-        """Triggers the brain to respond to direct user input."""
         self._think_in_background(user_prompt)
 
     def _think_in_background(self, prompt: str):
-        """Handles the threading to prevent the GUI from freezing."""
         if self.is_thinking:
-            return # Don't start a new thought if already thinking
-        
+            return
         self.is_thinking = True
         thread = threading.Thread(target=self._ask_brain_thread, args=(prompt,), daemon=True)
         thread.start()
 
     def _ask_brain_thread(self, prompt: str):
-        """The actual function that runs in the background thread."""
         response = self.brain.get_response(prompt)
-        # Schedule the 'say' method to be called on the main GUI thread
         self.canvas.after(0, self.say, response)
         self.is_thinking = False
 
-    # --- Speech Bubble Management ---
+    # --- Speech Bubble Management (Unchanged) ---
     def say(self, message: str, duration_ms: int = 4000):
-        """Displays a message in a speech bubble."""
         if self.bubble_visible: self.hide_bubble()
         self.bubble_message = message
         self.bubble_visible = True
@@ -156,30 +151,23 @@ class BouncingBall:
         self.bubble_message = ""
 
     def _redraw_speech_bubble(self):
-        """Draws the rounded rectangle bubble and its text."""
-        # ... (This logic is complex but unchanged from before)
         if self.bubble_rect_id: self.canvas.delete(self.bubble_rect_id)
         if self.bubble_text_id: self.canvas.delete(self.bubble_text_id)
-        
         bubble_x, bubble_y = self.x, self.y - self.radius - 30
         padding, corner_radius = 10, 15
-
         temp_text = self.canvas.create_text(-1000, -1000, text=self.bubble_message, font=("Arial", 10))
         text_bbox = self.canvas.bbox(temp_text)
         self.canvas.delete(temp_text)
-
         text_width = text_bbox[2] - text_bbox[0]
         text_height = text_bbox[3] - text_bbox[1]
-
         x0 = bubble_x - text_width / 2 - padding
         y0 = bubble_y - text_height / 2 - padding
         x1 = bubble_x + text_width / 2 + padding
         y1 = bubble_y + text_height / 2 + padding
-
         self.bubble_rect_id = create_rounded_rectangle(self.canvas, x0, y0, x1, y1, radius=corner_radius, fill="white", outline="black")
         self.bubble_text_id = self.canvas.create_text(bubble_x, bubble_y, text=self.bubble_message, font=("Arial", 10), fill="black")
 
-    # --- User Interaction Handlers ---
+    # --- User Interaction Handlers (Unchanged) ---
     def check_hover(self, event):
         dist = math.sqrt((event.x - self.x)**2 + (event.y - self.y)**2)
         is_currently_over = (dist <= self.radius)
@@ -210,14 +198,12 @@ class BouncingBall:
         if self.is_dragging:
             self.is_dragging = False
             speed = math.sqrt(self.vx**2 + self.vy**2)
-            if speed > 20:
-                self.trigger_event("being thrown really fast")
-            elif speed > 5:
-                self.trigger_event("being tossed")
-            else:
-                self.trigger_event("being put down gently")
+            if speed > 20: self.trigger_event("being thrown really fast")
+            elif speed > 5: self.trigger_event("being tossed")
+            else: self.trigger_event("being put down gently")
 
-# --- Main Application Setup ---
+
+# --- Main Application Setup (Unchanged) ---
 def main():
     root = tk.Tk()
     root.title("Desktop Pet")
@@ -228,40 +214,29 @@ def main():
     root.wm_attributes("-topmost", True)
     transparent_color = 'grey15'
     root.wm_attributes("-transparentcolor", transparent_color)
-
     canvas = tk.Canvas(root, bg=transparent_color, highlightthickness=0)
     canvas.pack(fill="both", expand=True)
-
     taskbar_height_estimate = 50
     ground_level = screen_height - taskbar_height_estimate
     ball = BouncingBall(canvas, screen_width, screen_height, ground_level)
-
-    # --- Event Bindings ---
     canvas.bind("<ButtonPress-1>", ball.on_mouse_press)
     canvas.bind("<B1-Motion>", ball.on_mouse_drag)
     canvas.bind("<ButtonRelease-1>", ball.on_mouse_release)
     canvas.bind("<Motion>", ball.check_hover)
-
     def close_app(event): root.destroy()
     root.bind("<Button-3>", close_app)
-
     def ask_pet_dialog(event):
         user_input = simpledialog.askstring("Talk to Pebble", "What do you want to say?")
         if user_input:
             ball.ask_brain(user_input)
     root.bind("<KeyPress-t>", ask_pet_dialog)
     canvas.focus_set()
-
-    # --- Main Game Loop ---
     def game_loop():
         ball.update()
-        # Spontaneous thought trigger
         if not ball.is_thinking and not ball.bubble_visible:
-            if random.randint(1, 800) == 1: # Lower number = more frequent thoughts
+            if random.randint(1, 800) == 1:
                 ball.trigger_event("got bored and had a random thought")
         root.after(UPDATE_INTERVAL, game_loop)
-
-    # Start the application
     game_loop()
     root.mainloop()
 
