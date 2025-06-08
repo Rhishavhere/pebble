@@ -196,14 +196,14 @@ class BouncingBall:
             
             # Trigger an event based on the speed of the throw
             speed = math.sqrt(self.vx**2 + self.vy**2)
-            if speed > 20:
+            if speed > 10:
                 self.trigger_event("being thrown really fast")
-            elif speed > 5:
+            elif speed > 3:
                 self.trigger_event("being tossed")
             else:
                 self.trigger_event("being put down gently")
 
-    # --- Brain, State, and Action Methods (Largely Unchanged) ---
+    # --- Brain, State, and Action Methods ---
 
     def ask_brain(self, user_prompt: str):
         self._think_in_background(user_prompt)
@@ -262,7 +262,7 @@ class BouncingBall:
         if self.bubble_text_id: self.canvas.delete(self.bubble_text_id)
         bubble_x, bubble_y = self.x, self.y - self.radius - 30
         padding, corner_radius = 10, 15
-        temp_text = self.canvas.create_text(-1000, -1000, text=self.bubble_message, font=("Arial", 10))
+        temp_text = self.canvas.create_text(-1000, -1000, text=self.bubble_message, font=("Comic Neue", 10, "bold"))
         text_bbox = self.canvas.bbox(temp_text)
         self.canvas.delete(temp_text)
         text_width = text_bbox[2] - text_bbox[0]
@@ -272,7 +272,7 @@ class BouncingBall:
         x1 = bubble_x + text_width / 2 + padding
         y1 = bubble_y + text_height / 2 + padding
         self.bubble_rect_id = create_rounded_rectangle(self.canvas, x0, y0, x1, y1, radius=corner_radius, fill="white", outline="black")
-        self.bubble_text_id = self.canvas.create_text(bubble_x, bubble_y, text=self.bubble_message, font=("Arial", 10), fill="black")
+        self.bubble_text_id = self.canvas.create_text(bubble_x, bubble_y, text=self.bubble_message, font=("Comic Neue", 10, "bold"), fill="black")
 
 
 # --- Main Application Setup ---
@@ -292,17 +292,16 @@ def main():
     canvas = tk.Canvas(root, bg=transparent_color, highlightthickness=0)
     canvas.pack(fill="both", expand=True)
 
-    ### NEW/MODIFIED: Define the ground level based on screen height ###
-    # This assumes a taskbar height of about 50 pixels. Adjust if needed.
+    # Ground Height
     ground_level = screen_height - 50
 
     ball = BouncingBall(canvas, screen_width, screen_height, ground_level)
 
-    ### NEW/MODIFIED: Bind all the necessary mouse events ###
+    # Bind all the necessary mouse events
     canvas.bind("<ButtonPress-1>", ball.on_mouse_press)
     canvas.bind("<B1-Motion>", ball.on_mouse_drag)
     canvas.bind("<ButtonRelease-1>", ball.on_mouse_release)
-    canvas.bind("<Motion>", ball.check_hover) # For the cursor change
+    canvas.bind("<Motion>", ball.check_hover) 
 
     def close_app(event):
         root.destroy()
@@ -318,10 +317,10 @@ def main():
 
     def game_loop():
         ball.update()
-        # Random thought logic (unchanged)
+        # Random thought logic
         if not ball.is_thinking and not ball.bubble_visible:
-            if random.randint(1, 800) == 1:
-                ball.trigger_event("got bored and had a random thought")
+            if random.randint(1, 300) == 1:
+                ball.trigger_event("got bored")
         root.after(UPDATE_INTERVAL, game_loop)
 
     game_loop()
